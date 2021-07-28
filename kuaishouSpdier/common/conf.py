@@ -16,8 +16,8 @@ env = "dev"
 
 base_url = "https://www.kuaishou.com/graphql"
 
-get_cookie_url = "https://www.kuaishou.com/search/author?searchKey=汽车"
-
+get_cookie_url = "https://www.kuaishou.com/"
+register_url = "https://id.kuaishou.com/pass/kuaishou/login/passToken"
 
 if env == "dev":
     proxy_ip_url = "http://192.168.200.145:10101/api/proxy_ip?queue_name=toutiao"

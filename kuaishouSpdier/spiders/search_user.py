@@ -12,6 +12,7 @@ from kuaishouSpdier.common.conf import base_url
 from kuaishouSpdier.common.conf import upload_user_url
 from kuaishouSpdier.common.utils import get_user_keywords
 from kuaishouSpdier.settings import log_file_path
+from kuaishouSpdier.common.conf import register_url
 
 from kuaishouSpdier.items import AccountItem
 
@@ -35,9 +36,30 @@ class SearchUserSpider(scrapy.Spider):
             yield Request(
                 url=get_cookie_url,
                 dont_filter=True,
-                callback=self.parse_cookie,
+                callback=self.register_did,
                 meta={"keyword": keyword, "pcursor": "", "searchSessionId": ""}
             )
+
+    def register_did(self, response):
+        post_data = {
+            "sid": "kuaishou.server.web",
+        }
+        Cookie = BaseModule.process_extract_cookie(response)
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36",
+            "Accept": "application/json",
+            "Cookie": Cookie,
+        }
+        yield Request(
+            method="POST",
+            url=register_url,
+            body=json.dumps(post_data),
+            dont_filter=True,
+            callback=self.parse_cookie,
+            headers=headers,
+            meta={"keyword": response.meta["keyword"], "pcursor": response.meta["pcursor"], "searchSessionId": response.meta["searchSessionId"], "Cookie": Cookie}
+        )
 
     def parse_cookie(self, response):
         post_data = {
@@ -51,9 +73,9 @@ class SearchUserSpider(scrapy.Spider):
         }
         headers = {
             "Content-Type": "application/json",
-            "User-Agent": "PostmanRuntime/7.26.8",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36",
             "Accept": "application/json",
-            "Cookie": BaseModule.process_extract_cookie(response),
+            "Cookie": response.meta["Cookie"],
         }
         yield Request(
             method="POST",
@@ -62,48 +84,58 @@ class SearchUserSpider(scrapy.Spider):
             dont_filter=True,
             callback=self.parse_list,
             headers=headers,
-            meta={"keyword": response.meta["keyword"]}
+            meta={"keyword": response.meta["keyword"], "pcursor": response.meta["pcursor"], "searchSessionId": response.meta["searchSessionId"], "Cookie": response.meta["Cookie"]}
+
         )
 
     def parse_list(self, response):
         keyword = response.meta["keyword"]
         res_json = response.json()
         info = res_json.get("data", {}).get("visionSearchUser", {})
-        users = info.get("users", {})
-        if users:
-            result_users = []
-            for user in users:
-                item_loader = KuaishouItemLoader(item=AccountItem(), response=response)
+        try:
+            users = info.get("users", {})
+            if users:
+                result_users = []
+                for user in users:
+                    item_loader = KuaishouItemLoader(item=AccountItem(), response=response)
 
-                item_loader.add_value("user_name", user.get("user_name"))
-                item_loader.add_value("user_id", user.get("user_id"))
-                item_loader.add_value("source_channel", "快手")
-                item_loader.add_value("remark", "搜索")
-                item_loader.add_value("dept_name", "2")
-                item_loader.add_value("search_word", keyword)
+                    item_loader.add_value("user_name", user.get("user_name"))
+                    item_loader.add_value("user_id", user.get("user_id"))
+                    item_loader.add_value("source_channel", "快手")
+                    item_loader.add_value("remark", "搜索")
+                    item_loader.add_value("dept_name", "2")
+                    item_loader.add_value("search_word", keyword)
 
-                accountItem = item_loader.load_item()
+                    accountItem = item_loader.load_item()
 
-                result_users.append(dict(accountItem))
-            yield Request(
-                url=upload_user_url,
-                method="POST",
-                body=json.dumps({"user": result_users}, ensure_ascii=False),
-                headers={"Content-Type": "application/json"},
-                callback=self.parse_result,
-                meta={"item": result_users},
-                dont_filter=True,
-            )
-
-        pcursor = info.get("pcursor")
-        searchSessionId = info.get("searchSessionId")
-        if pcursor != "no_more":
+                    result_users.append(dict(accountItem))
+                yield Request(
+                    url=upload_user_url,
+                    method="POST",
+                    body=json.dumps({"user": result_users}, ensure_ascii=False),
+                    headers={"Content-Type": "application/json"},
+                    callback=self.parse_result,
+                    meta={"item": result_users},
+                    dont_filter=True,
+                )
+            pcursor = info.get("pcursor")
+            searchSessionId = info.get("searchSessionId")
+            if pcursor != "no_more":
+                yield Request(
+                    url=get_cookie_url,
+                    dont_filter=True,
+                    callback=self.register_did,
+                    meta={"keyword": response.meta["keyword"], "pcursor": pcursor, "searchSessionId": searchSessionId}
+                )
+        except Exception as e:
             yield Request(
                 url=get_cookie_url,
                 dont_filter=True,
-                callback=self.parse_cookie,
-                meta={"keyword": response.meta["keyword"], "pcursor": pcursor, "searchSessionId": searchSessionId}
+                callback=self.register_did,
+                meta={"keyword": response.meta["keyword"], "pcursor": response.meta["pcursor"], "searchSessionId": response.meta["searchSessionId"]}
             )
+
+
 
     def parse_result(self, response):
         logger.info(response.meta["item"])

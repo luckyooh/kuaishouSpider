@@ -1,0 +1,9 @@
+kuaishouSpdier/log/*.log
+.idea
+kuaishouSpdier/common/*.pyc
+kuaishouSpdier/spiders/*.pyc
+kuaishouSpdier/test/*.pyc
+kuaishouSpdier/__pycache__
+kuaishouSpdier/common/__pycache__
+kuaishouSpdier/spiders/__pycache__
+kuaishouSpdier/test
